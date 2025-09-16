@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ephemeral Chat</title>
+</head>
+<body>
+  <h2>Ephemeral Room Chat</h2>
+  <input id="room" placeholder="Room code">
+  <button id="create">Create</button>
+  <button id="join">Join</button>
+
+  <div id="chat" style="display:none;">
+    <div id="messages" style="border:1px solid #aaa; height:200px; overflow:auto;"></div>
+    <input id="msg" placeholder="Type message...">
+    <button id="send">Send</button>
+  </div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+    let peer, conn;
+
+    const messages = document.getElementById('messages');
+    const chatDiv = document.getElementById('chat');
+    const roomInput = document.getElementById('room');
+
+    function add(msg) {
+      const d = document.createElement('div');
+      d.textContent = msg;
+      messages.appendChild(d);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    document.getElementById('create').onclick = () => {
+      const room = roomInput.value.trim();
+      if (!room) return alert('Enter room code');
+      
+      // Explicitly use free PeerJS cloud server
+      peer = new Peer(room, {
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true
+      });
+
+      peer.on('open', () => {
+        add("Room created: " + room);
+        chatDiv.style.display = 'block';
+      });
+
+      peer.on('connection', (c) => {
+        conn = c;
+        conn.on('data', (msg) => add("Peer: " + msg));
+      });
+
+      peer.on('error', (err) => {
+        add("Error: " + err.type);
+        console.error(err);
+      });
+    };
+
+    document.getElementById('join').onclick = () => {
+      const room = roomInput.value.trim();
+      if (!room) return alert('Enter room code');
+      
+      peer = new Peer({
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true
+      });
+
+      conn = peer.connect(room);
+
+      conn.on('open', () => {
+        chatDiv.style.display = 'block';
+        add("Joined room: " + room);
+      });
+
+      conn.on('data', (msg) => add("Peer: " + msg));
+
+      conn.on('error', (err) => {
+        add("Error: " + err.type);
+        console.error(err);
+      });
+    };
+
+    document.getElementById('send').onclick = () => {
+      const txt = document.getElementById('msg').value.trim();
+      if (!txt) return;
+      add("Me: " + txt);
+      if (conn) conn.send(txt);
+      document.getElementById('msg').value = '';
+    };
+
+  </script>
+</body>
+</html>
