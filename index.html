@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Ephemeral Chat</title>
+  <title>Ephemeral Group Chat</title>
 </head>
 <body>
-  <h2>Ephemeral Room Chat</h2>
+  <h2>Ephemeral Room Chat (Multi-User)</h2>
   <input id="room" placeholder="Room code">
   <button id="create">Create</button>
   <button id="join">Join</button>
@@ -16,9 +16,11 @@
     <button id="send">Send</button>
   </div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script>
-    let peer, conn;
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script>
+    let peer;
+    let connections = []; // hold all connections (for host + peers)
+    let isHost = false;
 
     const messages = document.getElementById('messages');
     const chatDiv = document.getElementById('chat');
@@ -31,68 +33,65 @@
       messages.scrollTop = messages.scrollHeight;
     }
 
+    // Handle incoming connection (host receives these)
+    function setupConnection(conn) {
+      connections.push(conn);
+
+      conn.on('data', (msg) => {
+        add("Peer: " + msg);
+
+        // If host, relay to all other peers
+        if (isHost) {
+          connections.forEach(c => {
+            if (c !== conn && c.open) c.send(msg);
+          });
+        }
+      });
+
+      conn.on('open', () => add("Peer joined"));
+      conn.on('close', () => add("Peer left"));
+    }
+
     document.getElementById('create').onclick = () => {
       const room = roomInput.value.trim();
       if (!room) return alert('Enter room code');
-      
-      // Explicitly use free PeerJS cloud server
-      peer = new Peer(room, {
-        host: '0.peerjs.com',
-        port: 443,
-        path: '/',
-        secure: true
-      });
+
+      isHost = true;
+      peer = new Peer(room, { host: '0.peerjs.com', port: 443, path: '/', secure: true });
 
       peer.on('open', () => {
         add("Room created: " + room);
         chatDiv.style.display = 'block';
       });
 
-      peer.on('connection', (c) => {
-        conn = c;
-        conn.on('data', (msg) => add("Peer: " + msg));
-      });
+      peer.on('connection', (conn) => setupConnection(conn));
 
-      peer.on('error', (err) => {
-        add("Error: " + err.type);
-        console.error(err);
-      });
+      peer.on('error', (err) => { add("Error: " + err.type); console.error(err); });
     };
 
     document.getElementById('join').onclick = () => {
       const room = roomInput.value.trim();
       if (!room) return alert('Enter room code');
-      
-      peer = new Peer({
-        host: '0.peerjs.com',
-        port: 443,
-        path: '/',
-        secure: true
-      });
 
-      conn = peer.connect(room);
+      peer = new Peer({ host: '0.peerjs.com', port: 443, path: '/', secure: true });
 
-      conn.on('open', () => {
+      peer.on('open', () => {
+        const conn = peer.connect(room);
+        setupConnection(conn);
         chatDiv.style.display = 'block';
         add("Joined room: " + room);
       });
 
-      conn.on('data', (msg) => add("Peer: " + msg));
-
-      conn.on('error', (err) => {
-        add("Error: " + err.type);
-        console.error(err);
-      });
+      peer.on('error', (err) => { add("Error: " + err.type); console.error(err); });
     };
 
     document.getElementById('send').onclick = () => {
       const txt = document.getElementById('msg').value.trim();
       if (!txt) return;
       add("Me: " + txt);
-      if (conn) conn.send(txt);
+      connections.forEach(c => { if (c.open) c.send(txt); });
       document.getElementById('msg').value = '';
     };
-
   </script>
 </body>
 </html>
