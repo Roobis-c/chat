@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ephemeral Chat - Room</title>
+</head>
+<body>
+  <h2 id="title">Chat Room</h2>
+
+  <div id="chat" style="display:none;">
+    <div id="messages" style="border:1px solid #aaa; height:200px; overflow:auto; margin-top:10px;"></div>
+    <input id="msg" placeholder="Type message...">
+    <button id="send">Send</button>
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script>
+    // Get query params
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get("room");
+    const mode = params.get("mode"); // create or join
+
+    let peer, conn;
+
+    const messages = document.getElementById('messages');
+    const chatDiv = document.getElementById('chat');
+    const title = document.getElementById('title');
+
+    function add(msg) {
+      const d = document.createElement('div');
+      d.textContent = msg;
+      messages.appendChild(d);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    if (!room || !mode) {
+      alert("Invalid room link");
+    } else {
+      title.textContent = `Room: ${room}`;
+      chatDiv.style.display = 'block';
+
+      if (mode === "create") {
+        peer = new Peer(room, { host: '0.peerjs.com', port: 443, path: '/', secure: true });
+
+        peer.on('open', () => add("Room created. Waiting for peer..."));
+
+        peer.on('connection', (c) => {
+          conn = c;
+          conn.on('open', () => add("Peer connected"));
+          conn.on('data', (msg) => add("Peer: " + msg));
+        });
+
+      } else if (mode === "join") {
+        peer = new Peer({ host: '0.peerjs.com', port: 443, path: '/', secure: true });
+
+        peer.on('open', () => {
+          conn = peer.connect(room);
+          conn.on('open', () => add("Connected to room: " + room));
+          conn.on('data', (msg) => add("Peer: " + msg));
+        });
+      }
+    }
+
+    document.getElementById('send').onclick = () => {
+      const txt = document.getElementById('msg').value.trim();
+      if (!txt) return;
+      add("Me: " + txt);
+      if (conn && conn.open) conn.send(txt);
+      document.getElementById('msg').value = '';
+    };
+  </script>
+</body>
+</html>
